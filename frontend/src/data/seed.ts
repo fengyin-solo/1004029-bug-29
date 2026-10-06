@@ -328,8 +328,8 @@ export const SEED_ROWS: Record<string, EntryRow[]> = {
     {
       "id": 2,
       "status": "运行中",
-      "pending": true,
-      "abnormal": true,
+      "pending": false,
+      "abnormal": false,
       "泵站编号": "PUMP-0002",
       "泵站名称": "泵站运行样例2",
       "所在区域": "泵站运行样例2",
@@ -352,6 +352,20 @@ export const SEED_ROWS: Record<string, EntryRow[]> = {
       "运行电流": "泵站运行样例3",
       "运行时长": "泵站运行样例3",
       "运行状态": "泵站运行样例3"
+    },
+    {
+      "id": 4,
+      "status": "故障中",
+      "pending": true,
+      "abnormal": true,
+      "泵站编号": "PUMP-0004",
+      "泵站名称": "泵站运行样例4",
+      "所在区域": "泵站运行样例4",
+      "水泵型号": "泵站运行样例4",
+      "额定流量": "泵站运行样例4",
+      "运行电流": "泵站运行样例4",
+      "运行时长": "泵站运行样例4",
+      "运行状态": "泵站运行样例4"
     }
   ],
   "drain_network": [

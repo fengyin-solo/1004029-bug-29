@@ -5,7 +5,9 @@ export type EntryRow = {
   status: string
   pending: boolean
   abnormal: boolean
-  [field: string]: string | number | boolean
+  // 乐观锁版本号：每次成功流转 +1，并发提交凭它判定只有一次生效。
+  revision?: number
+  [field: string]: string | number | boolean | undefined
 }
 
 export type ModuleMeta = {
@@ -18,6 +20,10 @@ export type ModuleMeta = {
   actions: string[]
   actionTargets: Record<string, string>
   metrics: string[]
+  // 状态机：动作 -> 允许发起该动作的当前状态。未配置的模块沿用历史宽松行为。
+  transitions?: Record<string, string[]>
+  // 各状态对应的看板标记；未配置时沿用 pending = 非末态 的推导。
+  stateFlags?: Record<string, { pending: boolean; abnormal: boolean }>
 }
 
 export type PageResult = {

@@ -1,5 +1,5 @@
 import { MODULE_BY_KEY } from '@/data/modules'
-import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import { allRows, commitRow, listRows, resetRows } from '@/data/local-store'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
@@ -35,24 +35,35 @@ export function runAction(key: string, id: number, action: string): ActionResult
     return { ok: false, message: `${meta.entity}没有登记「${action}」这个动作` }
   }
   const rows = listRows(key)
-  const index = rows.findIndex((row) => Number(row.id) === id)
-  if (index < 0) {
+  const row = rows.find((item) => Number(item.id) === id)
+  if (!row) {
     return { ok: false, message: `没有找到编号为 ${id} 的${meta.entity}` }
   }
-  const current = String(rows[index].status)
+  const current = String(row.status)
   if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
-  const lastStatus = meta.statuses[meta.statuses.length - 1]
-  const updated: EntryRow = {
-    ...rows[index],
-    status: target,
-    pending: target !== lastStatus,
-    abnormal: NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)),
+  // 状态机守卫：配置了 transitions 的模块只允许在合法前驱状态上发起动作，
+  // 非法跳级一律拒绝且不改状态。
+  const allowedFrom = meta.transitions?.[action]
+  if (allowedFrom && !allowedFrom.includes(current)) {
+    return {
+      ok: false,
+      message: `${meta.entity}当前为「${current}」，不能执行「${action}」，状态保持「${current}」`,
+    }
   }
-  const next = [...rows]
-  next[index] = updated
-  saveRows(key, next)
+  const flags = meta.stateFlags?.[target]
+  const committed = commitRow(key, id, Number(row.revision ?? 1), {
+    status: target,
+    pending: flags ? flags.pending : target !== meta.statuses[meta.statuses.length - 1],
+    abnormal: flags
+      ? flags.abnormal
+      : NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)),
+  })
+  if (!committed.ok) {
+    // 并发操作：版本已变，本次结果不落盘，保留当前状态。
+    return { ok: false, message: committed.message }
+  }
   return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
 }
 
