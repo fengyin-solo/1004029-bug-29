@@ -1,3 +1,4 @@
+import { MODULES } from './modules'
 import { SEED_ROWS } from './seed'
 import type { EntryRow } from './types'
 
@@ -6,6 +7,29 @@ const STORAGE_KEY = 'underground-pipeline-inspection:entries'
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+// 旧数据可能存了状态与镜像字段、标记不一致的行（比如故障中被误改成运行中之前的残留），
+// 加载时按模块登记的状态语义修复一遍，保证列表、详情、看板看到的都是同一个状态。
+function sanitize(rows: Record<string, EntryRow[]>): Record<string, EntryRow[]> {
+  for (const meta of MODULES) {
+    const list = rows[meta.key]
+    if (!list) {
+      continue
+    }
+    for (const row of list) {
+      const status = String(row.status)
+      if (meta.statusField && row[meta.statusField] !== status) {
+        row[meta.statusField] = status
+      }
+      const flags = meta.statusFlags?.[status]
+      if (flags) {
+        row.pending = flags.pending
+        row.abnormal = flags.abnormal
+      }
+    }
+  }
+  return rows
 }
 
 function readStorage(): Record<string, EntryRow[]> {
@@ -20,7 +44,7 @@ function readStorage(): Record<string, EntryRow[]> {
   }
   try {
     const parsed = JSON.parse(raw) as Record<string, EntryRow[]>
-    return { ...fallback, ...parsed }
+    return sanitize({ ...fallback, ...parsed })
   } catch {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback))
     return fallback

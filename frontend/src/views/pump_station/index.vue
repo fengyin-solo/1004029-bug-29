@@ -51,6 +51,7 @@
               :key="action"
               class="link"
               type="button"
+              :disabled="busyIds.includes(Number(row.id))"
               @click="runAction(action, row)"
             >
               {{ action }}
@@ -79,11 +80,11 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { ActionPayload, EntryRow } from '@/data/types'
 
 const meta = moduleMeta('pump_station')
 const columns = ["泵站编号", "泵站名称", "所在区域", "水泵型号", "额定流量", "运行电流", "运行时长", "运行状态"]
-const actions = ["启动泵站", "正常停机", "上报故障"]
+const actions = ["启动泵站", "正常停机", "上报故障", "故障恢复"]
 const statuses = ["待启机", "运行中", "已停机", "故障中"]
 const stats = [{"label": "运行中泵站", "value": 0}, {"label": "故障泵站", "value": 0}, {"label": "今日累计运行", "value": 0}]
 
@@ -91,6 +92,7 @@ const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
+const busyIds = ref<number[]>([])
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
@@ -114,12 +116,31 @@ function openCreate() {
 
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
-  const result = applyAction(meta.key, Number(row.id), action)
-  if (!result.ok) {
-    errorMessage.value = result.message
+  const id = Number(row.id)
+  if (busyIds.value.includes(id)) {
     return
   }
-  reload()
+  let payload: ActionPayload = {}
+  if (action === '故障恢复') {
+    const name = `泵站「${row['泵站名称'] ?? row['泵站编号'] ?? id}」`
+    const verifier = window.prompt(`${name}故障恢复前需要现场核验，请输入核验人姓名`)
+    if (verifier === null) {
+      errorMessage.value = '已取消故障恢复，状态保持「故障中」不变'
+      return
+    }
+    payload = { verifier }
+  }
+  busyIds.value = [...busyIds.value, id]
+  try {
+    const result = applyAction(meta.key, id, action, payload)
+    if (!result.ok) {
+      errorMessage.value = result.message
+      return
+    }
+    reload()
+  } finally {
+    busyIds.value = busyIds.value.filter((item) => item !== id)
+  }
 }
 
 function reload() {
